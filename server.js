@@ -1,17 +1,10 @@
-
-// 1. Import Express
 const express = require("express");
 
-// 2. Create Express application
 const app = express();
-
-// 3. Middleware to read JSON data
-app.use(express.json());
-
-// 4. Define port
 const PORT = 3000;
 
-// 5. Initial registration data
+app.use(express.json());
+
 let registrations = [
     {
         id: 501,
@@ -26,7 +19,7 @@ let registrations = [
         participantName: "Arjun Mehta",
         eventName: "Code Sprint",
         department: "IT",
-        ticketCount: 1,
+        ticketCount: 3,
         paymentStatus: "Pending"
     },
     {
@@ -34,22 +27,95 @@ let registrations = [
         participantName: "Neha Verma",
         eventName: "Tech Fest",
         department: "ECE",
-        ticketCount: 3,
+        ticketCount: 1,
         paymentStatus: "Paid"
     }
 ];
 
-// 6. GET all registrations
+let nextId = 504;
+
+function validateRegistration(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+        return "Request body must be a JSON object";
+    }
+
+    const { participantName, eventName, department, ticketCount, paymentStatus } = data;
+
+    if (
+        typeof participantName !== "string" || !participantName.trim() ||
+        typeof eventName !== "string" || !eventName.trim() ||
+        typeof department !== "string" || !department.trim()
+    ) {
+        return "All text fields are required";
+    }
+
+    if (!Number.isInteger(ticketCount) || ticketCount <= 0) {
+        return "ticketCount must be a positive integer";
+    }
+
+    if (!["Paid", "Pending"].includes(paymentStatus)) {
+        return "paymentStatus must be Paid or Pending";
+    }
+
+    return null;
+}
+
 app.get("/api/registrations", (req, res) => {
     res.status(200).json(registrations);
 });
 
-// GET registration by ID
-app.get("/api/registrations/:id", (req, res) => {
+app.post("/api/registrations", (req, res) => {
+    const error = validateRegistration(req.body);
 
+    if (error) {
+        return res.status(400).json({ message: error });
+    }
+
+    const newRegistration = {
+        id: nextId++,
+        participantName: req.body.participantName.trim(),
+        eventName: req.body.eventName.trim(),
+        department: req.body.department.trim(),
+        ticketCount: req.body.ticketCount,
+        paymentStatus: req.body.paymentStatus
+    };
+
+    registrations.push(newRegistration);
+
+    res.status(201).json(newRegistration);
+});
+
+app.get("/api/registrations/pending", (req, res) => {
+    const result = registrations.filter(
+        (r) => r.paymentStatus === "Pending"
+    );
+
+    res.status(200).json(result);
+});
+
+app.get("/api/registrations/filter", (req, res) => {
+    const department = req.query.department;
+
+    if (typeof department !== "string" || !department.trim()) {
+        return res.status(400).json({
+            message: "Please provide a department"
+        });
+    }
+
+    const result = registrations.filter(
+        (r) =>
+            r.department.toLowerCase() === department.trim().toLowerCase()
+    );
+
+    res.status(200).json(result);
+});
+
+app.get("/api/registrations/:id", (req, res) => {
     const id = Number(req.params.id);
 
-    const registration = registrations.find(r => r.id === id);
+    const registration = registrations.find(
+        (r) => r.id === id
+    );
 
     if (!registration) {
         return res.status(404).json({
@@ -58,63 +124,42 @@ app.get("/api/registrations/:id", (req, res) => {
     }
 
     res.status(200).json(registration);
-
 });
 
-
-// Start server (keep this at the bottom)
-app.listen(PORT, () => {
-    console.log("Server is running on port " + PORT);
-});
-
-
-// POST - Add new registration
-app.post("/api/registrations", (req, res) => {
-
-    const data = req.body;
-
-    // Validate input
-    if (
-        !data.participantName ||
-        !data.eventName ||
-        !data.department ||
-        !Number.isInteger(data.ticketCount) ||
-        data.ticketCount <= 0 ||
-        !["Paid", "Pending"].includes(data.paymentStatus)
-    ) {
-        return res.status(400).json({
-            message: "Invalid registration data"
-        });
-    }
-
-    // Generate unique ID
-    const newRegistration = {
-        id: Math.max(...registrations.map(r => r.id), 500) + 1,
-        participantName: data.participantName,
-        eventName: data.eventName,
-        department: data.department,
-        ticketCount: data.ticketCount,
-        paymentStatus: data.paymentStatus
-    };
-
-    // Add record to array
-    registrations.push(newRegistration);
-
-    // Send response
-    res.status(201).json({
-        message: "Registration added successfully",
-        registration: newRegistration
-    });
-
-});
-
-
-
-// PUT - Update registration by ID
 app.put("/api/registrations/:id", (req, res) => {
     const id = Number(req.params.id);
 
-    const index = registrations.findIndex(r => r.id === id);
+    const registration = registrations.find(
+        (r) => r.id === id
+    );
+
+    if (!registration) {
+        return res.status(404).json({
+            message: "Registration not found"
+        });
+    }
+
+    const error = validateRegistration(req.body);
+
+    if (error) {
+        return res.status(400).json({ message: error });
+    }
+
+    registration.participantName = req.body.participantName.trim();
+    registration.eventName = req.body.eventName.trim();
+    registration.department = req.body.department.trim();
+    registration.ticketCount = req.body.ticketCount;
+    registration.paymentStatus = req.body.paymentStatus;
+
+    res.status(200).json(registration);
+});
+
+app.delete("/api/registrations/:id", (req, res) => {
+    const id = Number(req.params.id);
+
+    const index = registrations.findIndex(
+        (r) => r.id === id
+    );
 
     if (index === -1) {
         return res.status(404).json({
@@ -122,13 +167,19 @@ app.put("/api/registrations/:id", (req, res) => {
         });
     }
 
-    registrations[index] = {
-        id,
-        ...req.body
-    };
+    registrations.splice(index, 1);
 
     res.status(200).json({
-        message: "Registration updated successfully",
-        registration: registrations[index]
+        message: "Registration deleted successfully"
     });
+});
+
+app.use((req, res) => {
+    res.status(404).json({
+        message: "Route not found"
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
